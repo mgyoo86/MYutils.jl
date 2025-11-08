@@ -39,13 +39,16 @@ filter(row -> row.n_spec > 100, df)
   * Type-unstable code being called with many type combinations
   * Hot paths in performance-critical code
 """
-function analyze_specializations(mod::Module; sort_by_specializations=true, include_details=false)
+function analyze_specializations(mod::Module; sort_by_specializations=true, include_details=false, debug_name=nothing)
     results = []
 
     # Get all names in the module
     for name in names(mod; all=true, imported=false)
         # Skip internal names starting with #
         startswith(string(name), "#") && continue
+
+        # Debug mode for specific function name
+        is_debug = !isnothing(debug_name) && string(name) == string(debug_name)
 
         # Try to get the binding
         try
@@ -57,9 +60,28 @@ function analyze_specializations(mod::Module; sort_by_specializations=true, incl
                 try
                     methods_list = methods(obj)
 
+                    if is_debug
+                        println("\n[DEBUG] Function: $name")
+                        println("  Total methods: $(length(methods_list))")
+                    end
+
                     for m in methods_list
+                        if is_debug
+                            println("  Method: $m")
+                            println("    Module: $(m.module) (target: $mod)")
+                        end
+
                         # Skip methods not defined in our module
-                        m.module != mod && continue
+                        if m.module != mod
+                            if is_debug
+                                println("    ⚠️  SKIPPED (wrong module)")
+                            end
+                            continue
+                        end
+
+                        if is_debug
+                            println("    ✓ ADDED")
+                        end
 
                         # Get specializations
                         specs = m.specializations
