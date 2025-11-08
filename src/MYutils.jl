@@ -5,7 +5,7 @@ using Statistics
 
 include("specializations.jl")
 
-export analyze_specializations, show_wide
+export analyze_specializations, show_wide, compare_specializations
 
 end # module
 
