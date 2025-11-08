@@ -39,16 +39,13 @@ filter(row -> row.n_spec > 100, df)
   * Type-unstable code being called with many type combinations
   * Hot paths in performance-critical code
 """
-function analyze_specializations(mod::Module; sort_by_specializations=true, include_details=false, debug_name=nothing)
+function analyze_specializations(mod::Module; sort_by_specializations=true, include_details=false)
     results = []
 
     # Get all names in the module
     for name in names(mod; all=true, imported=false)
         # Skip internal names starting with #
         startswith(string(name), "#") && continue
-
-        # Debug mode for specific function name
-        is_debug = !isnothing(debug_name) && string(name) == string(debug_name)
 
         # Try to get the binding
         try
@@ -60,71 +57,64 @@ function analyze_specializations(mod::Module; sort_by_specializations=true, incl
                 try
                     methods_list = methods(obj)
 
-                    if is_debug
-                        println("\n[DEBUG] Function: $name")
-                        println("  Total methods: $(length(methods_list))")
-                    end
-
                     for m in methods_list
-                        if is_debug
-                            println("  Method: $m")
-                            println("    Module: $(m.module) (target: $mod)")
-                        end
-
                         # Skip methods not defined in our module
                         if m.module != mod
-                            if is_debug
-                                println("    ⚠️  SKIPPED (wrong module)")
-                            end
                             continue
                         end
 
-                        if is_debug
-                            println("    ✓ ADDED")
+                        try
+                            # Get specializations
+                            specs = m.specializations
+                            if specs === nothing
+                                spec_list = []
+                                n_specs = 0
+                            elseif specs isa Core.MethodInstance
+                                # Single MethodInstance (not a collection)
+                                spec_list = [specs]
+                                n_specs = 1
+                            else
+                                # Collection (SimpleVector/svec)
+                                spec_list = filter(!isnothing, collect(specs))
+                                n_specs = length(spec_list)
+                            end
+
+                            # Get clean method string (without ANSI color codes)
+                            full_method_str = sprint(show, m, context=:color=>false)
+
+                            # Split into signature and location parts
+                            # Format: "signature @ module file:line"
+                            parts = split(full_method_str, " @ ", limit=2)
+                            signature_str = parts[1]
+                            location_str = length(parts) > 1 ? " @ " * parts[2] : ""
+
+                            # Column order: name, n_spec, spec_list, method, signature, location
+                            row = (
+                                name = string(name),
+                                n_spec = n_specs,
+                                spec_list = spec_list,
+                                method = full_method_str,
+                                signature = signature_str,
+                                location = location_str,
+                            )
+
+                            # Optional detailed info (raw data)
+                            if include_details
+                                row = merge(row, (
+                                    file = string(m.file),
+                                    line = m.line,
+                                    sig_raw = string(m.sig),
+                                ))
+                            end
+
+                            # Always include method object at the end for programmatic access
+                            row = merge(row, (method_object = m,))
+
+                            push!(results, row)
+                        catch e
+                            # Skip if we can't process this method
+                            continue
                         end
-
-                        # Get specializations
-                        specs = m.specializations
-                        if specs !== nothing
-                            spec_list = filter(!isnothing, collect(specs))
-                            n_specs = length(spec_list)
-                        else
-                            spec_list = []
-                            n_specs = 0
-                        end
-
-                        # Get clean method string (without ANSI color codes)
-                        full_method_str = sprint(show, m, context=:color=>false)
-
-                        # Split into signature and location parts
-                        # Format: "signature @ module file:line"
-                        parts = split(full_method_str, " @ ", limit=2)
-                        signature_str = parts[1]
-                        location_str = length(parts) > 1 ? " @ " * parts[2] : ""
-
-                        # Column order: name, n_spec, spec_list, method, signature, location
-                        row = (
-                            name = string(name),
-                            n_spec = n_specs,
-                            spec_list = spec_list,
-                            method = full_method_str,
-                            signature = signature_str,
-                            location = location_str,
-                        )
-
-                        # Optional detailed info (raw data)
-                        if include_details
-                            row = merge(row, (
-                                file = string(m.file),
-                                line = m.line,
-                                sig_raw = string(m.sig),
-                            ))
-                        end
-
-                        # Always include method object at the end for programmatic access
-                        row = merge(row, (method_object = m,))
-
-                        push!(results, row)
                     end
                 catch e
                     # Some objects might not have methods
