@@ -1,0 +1,12 @@
+name = "MYutils"
+uuid = "55b6fb55-485c-4542-a09a-95667dd04394"
+authors = ["Min-Gu Yoo <mgyoo86@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[compat]
+julia = "1.6"
+DataFrames = "1"
